@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 
 from app.api.routes.health import router as health_router
-from app.api.routes.ringcentral import router as ringcentral_router
-from app.config import get_settings
+from app.api.routes.twilio import router as twilio_router
+from app.config import apply_runtime_environment, get_settings
 
 
-settings = get_settings()
+settings = apply_runtime_environment(get_settings())
 
 app = FastAPI(
     title="phone-system",
@@ -14,7 +14,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
-app.include_router(ringcentral_router)
+app.include_router(twilio_router)
 
 
 @app.get("/", tags=["meta"])
@@ -24,4 +24,3 @@ async def root() -> dict[str, str]:
         "environment": settings.app_env,
         "status": "ok",
     }
-

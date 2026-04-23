@@ -19,8 +19,28 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-CALL_TYPES = {"NEW_CLIENT", "EXISTING_CLIENT", "OTHER"}
+CALL_TYPES = {"NEW_CLIENT", "EXISTING_CLIENT", "OTHER", "VOICEMAIL"}
 SYSTEM_PROMPT_PATH = Path(__file__).resolve().parents[2] / "ashley_system_prompt.txt"
+VOICE_RUNTIME_APPENDIX = """
+
+LIVE VOICE RUNTIME RULES
+
+You are handling a live phone call. Never speak or emit JSON, schema names, or internal log fields.
+Keep the Ashley personality, empathy, routing, intake questions, and legal safety rules exactly as written above.
+Ask questions naturally, one at a time, and keep responses concise enough for voice.
+When you have collected the information needed for the caller's flow, briefly confirm next steps aloud and then end the call naturally.
+"""
+CALL_LOG_EXTRACTION_APPENDIX = """
+
+POST-CALL EXTRACTION RULES
+
+You are now producing the internal structured call log after the call has ended.
+Return exactly one JSON object and nothing else.
+Use the schemas from the prompt above for NEW_CLIENT, EXISTING_CLIENT, OTHER, or VOICEMAIL.
+Do not wrap the JSON in markdown fences.
+If a field is unknown, use null for nullable fields or an empty string only where the schema expects text.
+Use the urgent criteria in the prompt above to determine escalate and escalation_reason.
+"""
 
 
 def load_system_prompt(prompt_path: Path = SYSTEM_PROMPT_PATH) -> str:
@@ -33,6 +53,10 @@ def load_system_prompt(prompt_path: Path = SYSTEM_PROMPT_PATH) -> str:
         raise RuntimeError(f"System prompt file is empty: {prompt_path}")
 
     return prompt_text
+
+
+def load_voice_agent_instructions(prompt_path: Path = SYSTEM_PROMPT_PATH) -> str:
+    return f"{load_system_prompt(prompt_path)}\n{VOICE_RUNTIME_APPENDIX.strip()}"
 
 
 @dataclass(slots=True)
@@ -62,9 +86,9 @@ class ConversationManager:
         system_prompt: str | None = None,
     ) -> None:
         self.settings = get_settings()
-        self._api_key = self.settings.gemini_api_key.strip()
+        self._api_key = self.settings.google_api_key.strip()
         if not self._api_key:
-            raise RuntimeError("GEMINI_API_KEY is not configured")
+            raise RuntimeError("GOOGLE_API_KEY is not configured")
 
         genai.configure(api_key=self._api_key)
         resolved_system_prompt = system_prompt or load_system_prompt()
@@ -209,7 +233,9 @@ class ConversationManager:
             if not isinstance(parsed, dict):
                 continue
 
-            if parsed.get("call_complete") is True:
+            parsed_call_type = str(parsed.get("call_type", "")).strip().upper()
+            if parsed.get("call_complete") is True or parsed_call_type in CALL_TYPES:
+                parsed.setdefault("call_complete", True)
                 return parsed
 
         return None
@@ -217,3 +243,52 @@ class ConversationManager:
     @staticmethod
     def _normalize_text(text: str) -> str:
         return re.sub(r"\s+", " ", text or "").strip()
+
+
+class ConversationLogExtractor:
+    def __init__(self, *, system_prompt: str | None = None) -> None:
+        self.settings = get_settings()
+        self._api_key = self.settings.google_api_key.strip()
+        if not self._api_key:
+            raise RuntimeError("GOOGLE_API_KEY is not configured")
+
+        genai.configure(api_key=self._api_key)
+        resolved_system_prompt = system_prompt or load_system_prompt()
+        self._model = genai.GenerativeModel(
+            model_name=self.settings.gemini_conversation_model,
+            system_instruction=f"{resolved_system_prompt}\n{CALL_LOG_EXTRACTION_APPENDIX.strip()}",
+            generation_config=genai.GenerationConfig(temperature=0.1),
+        )
+
+    async def extract_call_log(
+        self,
+        *,
+        conversation_history: list[dict[str, Any]],
+        caller_phone_number: str,
+    ) -> dict[str, Any]:
+        history_json = json.dumps(conversation_history, ensure_ascii=True, indent=2)
+        prompt = (
+            "Create the final internal call log JSON for this completed Ashley phone call.\n"
+            f"Known caller phone number: {caller_phone_number or 'unknown'}\n"
+            "Conversation history:\n"
+            f"{history_json}"
+        )
+
+        try:
+            response = await self._model.generate_content_async(prompt)
+        except Exception as exc:
+            logger.exception("Gemini call-log extraction request failed")
+            raise RuntimeError(f"Gemini call-log extraction failed: {exc}") from exc
+
+        response_text = ConversationManager._extract_response_text(response)
+        if not response_text:
+            raise RuntimeError("Gemini returned an empty call-log extraction response")
+
+        call_log = ConversationManager._extract_call_log(response_text)
+        if call_log is None:
+            raise RuntimeError(f"Gemini did not return a valid call log JSON: {response_text}")
+
+        if caller_phone_number and not call_log.get("phone") and not call_log.get("caller_phone_number"):
+            call_log["phone"] = caller_phone_number
+
+        return call_log

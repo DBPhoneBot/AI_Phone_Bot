@@ -6,17 +6,18 @@
 
 This service is intended to:
 
-- receive inbound phone-call events from RingCentral
+- receive inbound phone-call events from Twilio and hand them off to LiveKit via TwiML
+- run the live voice assistant in a LiveKit room
 - transcribe caller audio using Google Speech-to-Text
 - run the conversation through Gemini using the Ashley system prompt
-- generate spoken responses with Gemini 3.1 Flash TTS
+- generate spoken responses with Google Gemini TTS
 - log structured call activity to CaseDB
 
 The initial scaffold in this project sets up:
 
 - a FastAPI application entrypoint
 - environment-based configuration using `python-dotenv`
-- placeholder API routes for health checks and RingCentral webhooks
+- placeholder API routes for health checks and telephony webhooks
 - service modules for telephony, transcription, LLM, TTS, and CaseDB integration
 
 ## Project Structure
@@ -30,20 +31,20 @@ phone-system/
 └── app/
     ├── __init__.py
     ├── config.py
+    ├── livekit_agent.py
     ├── main.py
     ├── api/
     │   ├── __init__.py
     │   └── routes/
     │       ├── __init__.py
     │       ├── health.py
-    │       └── ringcentral.py
+    │       └── twilio.py
     └── services/
         ├── __init__.py
+        ├── call_records.py
         ├── casedb.py
         ├── llm.py
-        ├── ringcentral.py
-        ├── stt.py
-        └── tts.py
+        └── stt.py
 ```
 
 ## Setup
@@ -69,14 +70,14 @@ cp .env.example .env
 
 Required for a live inbound-call test:
 
-- `RC_CLIENT_ID`
-- `RC_CLIENT_SECRET`
-- `RC_JWT_TOKEN`
-- `RC_ACCOUNT_ID`
-- `GEMINI_API_KEY`
-- `GEMINI_CONVERSATION_MODEL`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+- `LIVEKIT_URL`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
 - `GOOGLE_API_KEY`
-- `GOOGLE_CREDENTIALS`
+- `GOOGLE_APPLICATION_CREDENTILS`
+- `GEMINI_CONVERSATION_MODEL`
 - `CASEDB_LOG_URL`
 - `CASEDB_API_KEY`
 - `CASEDB_API_SECRET`
@@ -86,8 +87,6 @@ Optional:
 - `GOOGLE_TTS_VOICE`
 - `CASEDB_ESCALATION_URL`
 - `HTTP_TIMEOUT_SECONDS`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
 
 4. Start the FastAPI server.
 
@@ -95,24 +94,31 @@ Optional:
 uvicorn app.main:app --reload
 ```
 
-For a local Ashley conversation test without RingCentral, run:
+5. Start the LiveKit Ashley agent worker.
+
+```bash
+python3 -m app.livekit_agent dev
+```
+
+For a local Ashley conversation test without the telephony provider, run:
 
 ```bash
 python3 scripts/local_conversation_test.py
 ```
 
-This local test only loads the Ashley conversation service and Gemini conversation client. It does not start FastAPI or initialize RingCentral.
+This local test only loads the Ashley conversation service and Gemini conversation client. It does not start FastAPI or initialize the telephony provider.
 
 ## Available Endpoints
 
 - `GET /health`
   - basic health check for the service
 - `POST /incoming-call`
-  - inbound RingCentral webhook route
+  - Twilio webhook that returns TwiML to connect callers to LiveKit SIP
 
 ## Notes
 
 - This scaffold is intentionally minimal and safe to extend one module at a time.
 - It does not yet implement full call streaming, transcription, or audio response handling.
 - The current conversation runtime loads the Ashley system prompt from `ashley_system_prompt.txt`.
-- The current TTS service is wired for Gemini 3.1 Flash TTS with RingCentral-compatible audio output.
+- The FastAPI app returns TwiML only; the live call experience runs in the LiveKit agent worker.
+- Twilio inbound calling still requires a LiveKit inbound trunk and dispatch rule outside this repo.

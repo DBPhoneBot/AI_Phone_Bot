@@ -346,9 +346,12 @@ class GoogleSpeechToTextClient:
 
 
 def _load_google_credentials():
-    raw_credentials = os.getenv("GOOGLE_CREDENTIALS", "").strip()
+    raw_credentials = (
+        os.getenv("GOOGLE_APPLICATION_CREDENTILS", "").strip()
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    )
     if not raw_credentials:
-        raise RuntimeError("GOOGLE_CREDENTIALS is not set")
+        raise RuntimeError("GOOGLE_APPLICATION_CREDENTILS is not set")
 
     credentials_path = Path(raw_credentials).expanduser()
     if credentials_path.exists():
@@ -359,7 +362,7 @@ def _load_google_credentials():
         credentials_info = json.loads(raw_credentials)
     except json.JSONDecodeError as exc:
         raise RuntimeError(
-            "GOOGLE_CREDENTIALS must be a valid file path or service-account JSON"
+            "GOOGLE_APPLICATION_CREDENTILS must be a valid file path or service-account JSON"
         ) from exc
 
     logger.info("Loading Google STT credentials from inline JSON")

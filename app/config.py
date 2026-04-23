@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 from dotenv import load_dotenv
@@ -13,27 +14,22 @@ class Settings(BaseSettings):
     app_port: int = Field(default=8000, alias="APP_PORT")
     app_env: str = Field(default="development", alias="APP_ENV")
     public_base_url: str = Field(default="", alias="PUBLIC_BASE_URL")
+    webhook_base_url: str = Field(default="", alias="WEBHOOK_BASE_URL")
 
-    ringcentral_client_id: str = Field(default="", alias="RC_CLIENT_ID")
-    ringcentral_client_secret: str = Field(default="", alias="RC_CLIENT_SECRET")
-    ringcentral_jwt: str = Field(default="", alias="RC_JWT_TOKEN")
-    ringcentral_account_id: str = Field(default="", alias="RC_ACCOUNT_ID")
-    ringcentral_server_url: str = Field(
-        default="https://platform.ringcentral.com",
-        alias="RC_SERVER_URL",
-    )
+    livekit_api_key: str = Field(default="", alias="LIVEKIT_API_KEY")
+    livekit_api_secret: str = Field(default="", alias="LIVEKIT_API_SECRET")
+    livekit_url: str = Field(default="", alias="LIVEKIT_URL")
+    twilio_account_sid: str = Field(default="", alias="TWILIO_ACCOUNT_SID")
+    twilio_auth_token: str = Field(default="", alias="TWILIO_AUTH_TOKEN")
 
     google_cloud_project: str = Field(default="", alias="GOOGLE_CLOUD_PROJECT")
-    google_credentials: str = Field(default="", alias="GOOGLE_CREDENTIALS")
+    google_application_credentils: str = Field(default="", alias="GOOGLE_APPLICATION_CREDENTILS")
     google_stt_language_code: str = Field(default="en-US", alias="GOOGLE_STT_LANGUAGE_CODE")
 
-    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     gemini_conversation_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_CONVERSATION_MODEL")
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
-    openai_model: str = Field(default="gpt-4o", alias="OPENAI_MODEL")
-
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
-    google_tts_voice: str = Field(default="Sulafat", alias="GOOGLE_TTS_VOICE")
+    # Named Gemini TTS voice, for example Aoede, Charon, Kore, or Puck.
+    google_tts_voice: str = Field(default="Kore", alias="GOOGLE_TTS_VOICE")
 
     casedb_log_url: str = Field(default="", alias="CASEDB_LOG_URL")
     casedb_api_key: str = Field(default="", alias="CASEDB_API_KEY")
@@ -54,3 +50,11 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def apply_runtime_environment(settings: Settings | None = None) -> Settings:
+    resolved_settings = settings or get_settings()
+    credentials_path = resolved_settings.google_application_credentils.strip()
+    if credentials_path and not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
+    return resolved_settings
