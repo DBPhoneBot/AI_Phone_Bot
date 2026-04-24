@@ -31,6 +31,9 @@ load_dotenv()
 logger = logging.getLogger("ashley-livekit-agent")
 ROOM_PREFIX = "call-"
 settings = apply_runtime_environment(get_settings())
+LIVEKIT_URL = "wss://casedb-call-connector-0xngbkk5.livekit.cloud"
+LIVEKIT_API_KEY = "APIjGPEhPshyZdD"
+LIVEKIT_API_SECRET = "FU7YhrySr9PYjWsu19jiEvTtdbrmkgCVdeikJpqaScW"
 
 
 def _extract_text_content(content: Any) -> str:
@@ -119,9 +122,9 @@ class AshleyVoiceAgent(Agent):
 
 
 server = AgentServer(
-    ws_url=settings.livekit_url,
-    api_key=settings.livekit_api_key,
-    api_secret=settings.livekit_api_secret,
+    ws_url=LIVEKIT_URL,
+    api_key=LIVEKIT_API_KEY,
+    api_secret=LIVEKIT_API_SECRET,
 )
 
 
