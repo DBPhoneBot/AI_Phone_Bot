@@ -30,6 +30,7 @@ load_dotenv()
 
 logger = logging.getLogger("ashley-livekit-agent")
 ROOM_PREFIX = "call-"
+settings = apply_runtime_environment(get_settings())
 
 
 def _extract_text_content(content: Any) -> str:
@@ -117,7 +118,11 @@ class AshleyVoiceAgent(Agent):
         )
 
 
-server = AgentServer()
+server = AgentServer(
+    ws_url=settings.livekit_url,
+    api_key=settings.livekit_api_key,
+    api_secret=settings.livekit_api_secret,
+)
 
 
 def prewarm(proc: JobProcess) -> None:
@@ -129,8 +134,6 @@ server.setup_fnc = prewarm
 
 @server.rtc_session(agent_name="ashley")
 async def entrypoint(ctx: JobContext) -> None:
-    settings = apply_runtime_environment(get_settings())
-
     if not ctx.room.name.startswith(ROOM_PREFIX):
         logger.info(
             "Skipping LiveKit room because it does not match the configured call dispatch prefix",
