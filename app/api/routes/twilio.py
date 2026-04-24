@@ -76,13 +76,11 @@ async def incoming_call_webhook(request: Request) -> Response:
     normalized_to_number = to_number.lstrip("+")
     sip_uri = f"sip:+{normalized_to_number}@{TARGET_SIP_HOST};room=call-{call_sid}"
     logger.info(
-        "Returning TwiML to connect Twilio caller to LiveKit SIP",
-        extra={
-            "call_sid": call_sid,
-            "from_number": from_number,
-            "to_number": to_number,
-            "sip_uri": sip_uri,
-        },
+        "Twilio incoming_call_webhook returning SIP URI: call_sid=%s from_number=%s to_number=%s sip_uri=%s",
+        call_sid,
+        from_number,
+        to_number,
+        sip_uri,
     )
 
     return Response(
