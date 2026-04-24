@@ -12,7 +12,6 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["twilio"])
-TARGET_SIP_HOST = "5thazkme65i.sip.livekit.cloud"
 
 
 def _parse_livekit_sip_target(livekit_url: str) -> tuple[str, str, str]:
@@ -30,6 +29,15 @@ def _parse_livekit_sip_target(livekit_url: str) -> tuple[str, str, str]:
     username = parsed_url.username or ""
     password = parsed_url.password or ""
     return host, username, password
+
+
+def _derive_livekit_sip_host(livekit_url: str) -> str:
+    host, _, _ = _parse_livekit_sip_target(livekit_url)
+    if host.endswith(".sip.livekit.cloud"):
+        return host
+    if host.endswith(".livekit.cloud"):
+        return host.replace(".livekit.cloud", ".sip.livekit.cloud")
+    return host
 
 
 def _build_twiml_response(*, sip_uri: str, username: str = "", password: str = "") -> str:
@@ -67,6 +75,7 @@ async def incoming_call_webhook(request: Request) -> Response:
     from_number = str(form.get("From", "")).strip()
     to_number = str(form.get("To", "")).strip()
     _, sip_username, sip_password = _parse_livekit_sip_target(settings.livekit_url)
+    sip_host = _derive_livekit_sip_host(settings.livekit_url)
 
     if not call_sid:
         raise RuntimeError("Twilio inbound webhook did not include a CallSid")
@@ -74,7 +83,7 @@ async def incoming_call_webhook(request: Request) -> Response:
         raise RuntimeError("Twilio inbound webhook did not include a destination number")
 
     normalized_to_number = to_number.lstrip("+")
-    sip_uri = f"sip:+{normalized_to_number}@{TARGET_SIP_HOST};room=call-{call_sid}"
+    sip_uri = f"sip:+{normalized_to_number}@{sip_host};room=call-{call_sid}"
     logger.info(
         "Returning TwiML to connect Twilio caller to LiveKit SIP",
         extra={
