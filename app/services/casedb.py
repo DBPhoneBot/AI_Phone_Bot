@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
@@ -133,12 +134,45 @@ class CaseDBClient:
     def _build_case_log_payload(self, record: dict[str, Any]) -> dict[str, Any]:
         call_log = record["call_log"]
         call_metadata = record["call_metadata"]
+        caller_name = str(
+            call_log.get("name")
+            or call_log.get("caller_name")
+            or ""
+        ).strip()
+        caller_phone_number = str(
+            call_log.get("phone")
+            or call_log.get("caller_phone_number")
+            or call_metadata.get("caller_phone_number", "")
+            or ""
+        ).strip()
+        incident_description = str(
+            call_log.get("incident_description")
+            or call_log.get("description")
+            or ""
+        ).strip()
+        incident_date = self._normalize_incident_date(call_log.get("incident_date"))
+        prior_attorney_contact = int(bool(call_log.get("prior_attorney_contact", False)))
+        escalate = int(bool(call_log.get("escalate", False)))
+        escalate_reason = (
+            call_log.get("escalate_reason")
+            or call_log.get("escalation_reason")
+            or None
+        )
+        timestamp = str(call_log.get("timestamp") or record["saved_at"]).strip()
 
         # Confirm with the CaseDB developer whether the completed call log should be
         # sent to this exact endpoint and whether these field names match the final API.
         payload = {
-            "caller_phone_number": call_metadata.get("caller_phone_number", ""),
             "call_type": call_metadata.get("call_type", "") or call_log.get("call_type", ""),
+            "name": caller_name or None,
+            "phone": caller_phone_number or None,
+            "incident_description": incident_description or None,
+            "incident_date": incident_date or None,
+            "prior_attorney_contact": prior_attorney_contact,
+            "escalate": escalate,
+            "escalate_reason": escalate_reason,
+            "timestamp": timestamp,
+            "caller_phone_number": caller_phone_number,
             "call_start_time": call_metadata.get("call_start_time", ""),
             "call_end_time": call_metadata.get("call_end_time", ""),
             "call_log": call_log,
@@ -146,14 +180,72 @@ class CaseDBClient:
             "description": call_log.get("description", ""),
             "message_for_staff": call_log.get("message_for_staff", ""),
             "follow_up_required": bool(call_log.get("follow_up_required", False)),
-            "escalate": bool(call_log.get("escalate", False)),
+            "escalate_bool": bool(call_log.get("escalate", False)),
         }
 
-        caller_name = str(call_log.get("caller_name", "")).strip()
         if caller_name:
             payload["caller_name"] = caller_name
 
         return payload
+
+    @staticmethod
+    def _normalize_incident_date(raw_value: Any) -> str:
+        raw_text = str(raw_value or "").strip()
+        if not raw_text:
+            return ""
+
+        normalized = re.sub(r"(\d{1,2})(st|nd|rd|th)\b", r"\1", raw_text, flags=re.IGNORECASE)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        lowered = normalized.lower()
+        today = datetime.now(timezone.utc).date()
+
+        relative_dates = {
+            "today": today,
+            "yesterday": today - timedelta(days=1),
+            "tomorrow": today + timedelta(days=1),
+        }
+        if lowered in relative_dates:
+            return relative_dates[lowered].isoformat()
+
+        # Try fully specified formats first.
+        explicit_formats = (
+            "%Y-%m-%d",
+            "%m/%d/%Y",
+            "%m-%d-%Y",
+            "%m/%d/%y",
+            "%m-%d-%y",
+            "%B %d, %Y",
+            "%B %d %Y",
+            "%b %d, %Y",
+            "%b %d %Y",
+        )
+        for fmt in explicit_formats:
+            try:
+                return datetime.strptime(normalized, fmt).date().isoformat()
+            except ValueError:
+                continue
+
+        # Handle month/day inputs that omit the year by assuming the current year.
+        current_year = today.year
+        month_day_formats = (
+            "%B %d",
+            "%b %d",
+            "%m/%d",
+            "%m-%d",
+        )
+        for fmt in month_day_formats:
+            try:
+                parsed = datetime.strptime(normalized, fmt).date().replace(year=current_year)
+            except ValueError:
+                continue
+
+            # If the assumed date is far in the future, prefer the previous year.
+            if parsed > today + timedelta(days=30):
+                parsed = parsed.replace(year=current_year - 1)
+            return parsed.isoformat()
+
+        logger.warning("Could not normalize incident_date for CaseDB", extra={"incident_date": raw_text})
+        return raw_text
 
     def _build_escalation_payload(self, record: dict[str, Any]) -> dict[str, Any]:
         call_log = record["call_log"]

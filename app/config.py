@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     gemini_conversation_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_CONVERSATION_MODEL")
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
-    # Named Gemini TTS voice, for example Aoede, Charon, Kore, or Puck.
+    # Named Gemini TTS voice.
     google_tts_voice: str = Field(default="Kore", alias="GOOGLE_TTS_VOICE")
 
     casedb_log_url: str = Field(default="", alias="CASEDB_LOG_URL")

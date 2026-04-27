@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -137,10 +138,11 @@ server.setup_fnc = prewarm
 
 @server.rtc_session(agent_name="ashley")
 async def entrypoint(ctx: JobContext) -> None:
-    if not ctx.room.name.startswith(ROOM_PREFIX):
+    print("ASHLEY GEMINI AGENT STARTING")
+    if not (ctx.room.name.startswith("call-") or ctx.room.name.startswith("call-_")):
         logger.info(
             "Skipping LiveKit room because it does not match the configured call dispatch prefix",
-            extra={"room": ctx.room.name, "expected_prefix": ROOM_PREFIX},
+            extra={"room": ctx.room.name, "expected_prefix": "call- or call-_"},
         )
         return
 
@@ -167,6 +169,10 @@ async def entrypoint(ctx: JobContext) -> None:
 
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
+    google_credentials_file = (
+        settings.google_application_credentils.strip()
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    )
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
@@ -175,9 +181,9 @@ async def entrypoint(ctx: JobContext) -> None:
         "voice_name": settings.google_tts_voice,
         "model_name": "gemini-2.5-flash-tts",
     }
-    if settings.google_application_credentils:
-        google_stt_kwargs["credentials_file"] = settings.google_application_credentils
-        google_tts_kwargs["credentials_file"] = settings.google_application_credentils
+    if google_credentials_file:
+        google_stt_kwargs["credentials_file"] = google_credentials_file
+        google_tts_kwargs["credentials_file"] = google_credentials_file
 
     session = AgentSession(
         stt=google.STT(**google_stt_kwargs),
