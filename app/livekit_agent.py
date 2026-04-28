@@ -172,6 +172,11 @@ async def entrypoint(ctx: JobContext) -> None:
     google_credentials_file = PROJECT_ROOT / "google-creds.json"
     print("Google credentials file path:", google_credentials_file)
     print("Google credentials file exists:", google_credentials_file.exists())
+    if google_credentials_file.exists():
+        print(
+            "Google credentials file first 200 chars:",
+            google_credentials_file.read_text()[:200],
+        )
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
