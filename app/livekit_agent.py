@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
@@ -19,7 +21,6 @@ from livekit.agents import (
 )
 from livekit.agents.beta import EndCallTool
 from livekit.plugins import google, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from app.config import apply_runtime_environment, get_settings
 from app.services.call_records import build_call_metadata, normalize_completed_call_log
@@ -169,10 +170,44 @@ async def entrypoint(ctx: JobContext) -> None:
 
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
-    google_credentials_file = (
-        settings.google_application_credentils.strip()
-        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    google_credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+    print(
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON found:",
+        bool(google_credentials_json),
     )
+    print(
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON length:",
+        len(google_credentials_json),
+    )
+    print(
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON first 100 chars:",
+        google_credentials_json[:100],
+    )
+
+    google_credentials_file = ""
+    if google_credentials_json:
+        credentials_payload = google_credentials_json
+        try:
+            credentials_payload = json.dumps(json.loads(google_credentials_json))
+        except json.JSONDecodeError:
+            print("GOOGLE_APPLICATION_CREDENTIALS_JSON could not be parsed as JSON; writing raw value to temp file")
+
+        temp_credentials_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            prefix="google-creds-",
+            delete=False,
+        )
+        with temp_credentials_file as handle:
+            handle.write(credentials_payload)
+            google_credentials_file = handle.name
+        print("Google credentials temp file path:", google_credentials_file)
+    else:
+        google_credentials_file = (
+            settings.google_application_credentils.strip()
+            or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+        )
+
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
@@ -194,7 +229,6 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
         tts=google.TTS(**google_tts_kwargs),
         vad=ctx.proc.userdata["vad"],
-        turn_detection=MultilingualModel(),
         preemptive_generation=True,
         tts_text_transforms=["filter_emoji", "filter_markdown"],
     )
