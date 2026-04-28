@@ -190,7 +190,10 @@ async def entrypoint(ctx: JobContext) -> None:
     if google_credentials_json:
         credentials_payload = google_credentials_json
         try:
-            credentials_payload = json.dumps(json.loads(google_credentials_json))
+            credentials_payload = json.dumps(
+                json.loads(google_credentials_json),
+                separators=(",", ":"),
+            )
         except json.JSONDecodeError:
             print("GOOGLE_APPLICATION_CREDENTIALS_JSON could not be parsed as JSON; writing raw value to temp file")
 
