@@ -194,7 +194,7 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
         tts=google.TTS(**google_tts_kwargs),
         vad=ctx.proc.userdata["vad"],
-        turn_detection=MultilingualModel(),
+        #turn_detection=MultilingualModel(),
         preemptive_generation=True,
         tts_text_transforms=["filter_emoji", "filter_markdown"],
     )
