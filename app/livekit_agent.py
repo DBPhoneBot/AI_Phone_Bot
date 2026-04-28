@@ -172,7 +172,6 @@ async def entrypoint(ctx: JobContext) -> None:
 
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
-<<<<<<< HEAD
     google_credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
     print(
         "GOOGLE_APPLICATION_CREDENTIALS_JSON found:",
@@ -206,20 +205,6 @@ async def entrypoint(ctx: JobContext) -> None:
             google_credentials_file = handle.name
         print("Google credentials temp file path:", google_credentials_file)
     else:
-=======
-
-    # Handle Google credentials - support both file path and JSON content
-    google_credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
-    google_credentials_file = None
-
-    if google_credentials_json:
-        # Write JSON content to temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            f.write(google_credentials_json)
-            google_credentials_file = f.name
-    else:
-        # Fall back to file path
->>>>>>> 8c06c6ad727b44fa9e3fb703ac6fdc6c8fa041e1
         google_credentials_file = (
             settings.google_application_credentils.strip()
             or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
@@ -247,10 +232,6 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
         tts=google.TTS(**google_tts_kwargs),
         vad=ctx.proc.userdata["vad"],
-<<<<<<< HEAD
-=======
-        #turn_detection=MultilingualModel(),
->>>>>>> 8c06c6ad727b44fa9e3fb703ac6fdc6c8fa041e1
         preemptive_generation=True,
         tts_text_transforms=["filter_emoji", "filter_markdown"],
     )
