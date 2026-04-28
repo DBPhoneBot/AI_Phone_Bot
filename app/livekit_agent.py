@@ -4,6 +4,8 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
+import json
+import tempfile
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -19,7 +21,6 @@ from livekit.agents import (
 )
 from livekit.agents.beta import EndCallTool
 from livekit.plugins import google, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from app.config import apply_runtime_environment, get_settings
 from app.services.call_records import build_call_metadata, normalize_completed_call_log
@@ -169,10 +170,23 @@ async def entrypoint(ctx: JobContext) -> None:
 
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
-    google_credentials_file = (
-        settings.google_application_credentils.strip()
-        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-    )
+
+    # Handle Google credentials - support both file path and JSON content
+    google_credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+    google_credentials_file = None
+
+    if google_credentials_json:
+        # Write JSON content to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write(google_credentials_json)
+            google_credentials_file = f.name
+    else:
+        # Fall back to file path
+        google_credentials_file = (
+            settings.google_application_credentils.strip()
+            or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+        )
+
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
@@ -185,6 +199,7 @@ async def entrypoint(ctx: JobContext) -> None:
         google_stt_kwargs["credentials_file"] = google_credentials_file
         google_tts_kwargs["credentials_file"] = google_credentials_file
 
+    
     session = AgentSession(
         stt=google.STT(**google_stt_kwargs),
         llm=google.LLM(
