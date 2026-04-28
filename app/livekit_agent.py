@@ -170,6 +170,8 @@ async def entrypoint(ctx: JobContext) -> None:
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
     google_credentials_file = PROJECT_ROOT / "google-creds.json"
+    print("Google credentials file path:", google_credentials_file)
+    print("Google credentials file exists:", google_credentials_file.exists())
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
