@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
-import tempfile
 from datetime import datetime, timezone
 from typing import Any
-import json
-import tempfile
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -172,47 +168,6 @@ async def entrypoint(ctx: JobContext) -> None:
 
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
-    google_credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
-    print(
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON found:",
-        bool(google_credentials_json),
-    )
-    print(
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON length:",
-        len(google_credentials_json),
-    )
-    print(
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON first 100 chars:",
-        google_credentials_json[:100],
-    )
-
-    google_credentials_file = ""
-    if google_credentials_json:
-        credentials_payload = google_credentials_json
-        try:
-            credentials_payload = json.dumps(
-                json.loads(google_credentials_json),
-                separators=(",", ":"),
-            )
-        except json.JSONDecodeError:
-            print("GOOGLE_APPLICATION_CREDENTIALS_JSON could not be parsed as JSON; writing raw value to temp file")
-
-        temp_credentials_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".json",
-            prefix="google-creds-",
-            delete=False,
-        )
-        with temp_credentials_file as handle:
-            handle.write(credentials_payload)
-            google_credentials_file = handle.name
-        print("Google credentials temp file path:", google_credentials_file)
-    else:
-        google_credentials_file = (
-            settings.google_application_credentils.strip()
-            or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-        )
-
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
@@ -221,9 +176,6 @@ async def entrypoint(ctx: JobContext) -> None:
         "voice_name": settings.google_tts_voice,
         "model_name": "gemini-2.5-flash-tts",
     }
-    if google_credentials_file:
-        google_stt_kwargs["credentials_file"] = google_credentials_file
-        google_tts_kwargs["credentials_file"] = google_credentials_file
 
     
     session = AgentSession(
