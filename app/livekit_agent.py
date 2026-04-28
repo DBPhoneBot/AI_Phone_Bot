@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -31,6 +31,7 @@ load_dotenv()
 logger = logging.getLogger("ashley-livekit-agent")
 ROOM_PREFIX = "call-"
 settings = apply_runtime_environment(get_settings())
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 LIVEKIT_URL = "wss://casedb-call-connector-0xngbkk5.livekit.cloud"
 LIVEKIT_API_KEY = "APIjGPEhPshyZdD"
 LIVEKIT_API_SECRET = "FU7YhrySr9PYjWsu19jiEvTtdbrmkgCVdeikJpqaScW"
@@ -168,6 +169,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
+    google_credentials_file = PROJECT_ROOT / "google-creds.json"
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
@@ -176,6 +178,9 @@ async def entrypoint(ctx: JobContext) -> None:
         "voice_name": settings.google_tts_voice,
         "model_name": "gemini-2.5-flash-tts",
     }
+    if google_credentials_file.exists():
+        google_stt_kwargs["credentials_file"] = str(google_credentials_file)
+        google_tts_kwargs["credentials_file"] = str(google_credentials_file)
 
     
     session = AgentSession(
