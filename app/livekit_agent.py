@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -170,13 +172,30 @@ async def entrypoint(ctx: JobContext) -> None:
     casedb_client = CaseDBClient()
     call_log_extractor = ConversationLogExtractor()
     google_credentials_file = PROJECT_ROOT / "google-creds.json"
+    runtime_google_credentials_file: str | None = None
     print("Google credentials file path:", google_credentials_file)
     print("Google credentials file exists:", google_credentials_file.exists())
     if google_credentials_file.exists():
+        google_credentials_text = google_credentials_file.read_text()
         print(
             "Google credentials file first 200 chars:",
-            google_credentials_file.read_text()[:200],
+            google_credentials_text[:200],
         )
+        google_credentials_data = json.loads(google_credentials_text)
+        private_key = google_credentials_data.get("private_key")
+        if isinstance(private_key, str):
+            google_credentials_data["private_key"] = private_key.replace("\\n", "\n")
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            prefix="google-creds-fixed-",
+            delete=False,
+        ) as handle:
+            json.dump(google_credentials_data, handle)
+            runtime_google_credentials_file = handle.name
+
+        print("Runtime Google credentials temp file:", runtime_google_credentials_file)
     google_stt_kwargs: dict[str, Any] = {
         "languages": settings.google_stt_language_code,
         "spoken_punctuation": False,
@@ -185,9 +204,9 @@ async def entrypoint(ctx: JobContext) -> None:
         "voice_name": settings.google_tts_voice,
         "model_name": "gemini-2.5-flash-tts",
     }
-    if google_credentials_file.exists():
-        google_stt_kwargs["credentials_file"] = str(google_credentials_file)
-        google_tts_kwargs["credentials_file"] = str(google_credentials_file)
+    if runtime_google_credentials_file:
+        google_stt_kwargs["credentials_file"] = runtime_google_credentials_file
+        google_tts_kwargs["credentials_file"] = runtime_google_credentials_file
 
     
     session = AgentSession(
